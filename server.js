@@ -33,9 +33,9 @@ app.get('/auth/google-login-url', (req, res) => {
 });
 
 // OAuth Callback
-app.post('/auth/callback', async (req, res) => {
+app.get('/auth/callback', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code } = req.query;
     if (!code) return res.status(400).json({ error: 'No code' });
 
     const { tokens } = await oauth2Client.getToken(code);
