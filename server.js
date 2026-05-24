@@ -63,10 +63,14 @@ input:focus, textarea:focus { outline: none; border-color: #667eea; }
 .scanner-modal.show { display: flex; }
 .scanner-header { color: white; text-align: center; padding: 10px; font-size: 14px; }
 .scanner-video-container { flex: 1; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-#videoElement { max-width: 100%; max-height: 100%; }
-#overlayCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+#videoElement { width: 100%; height: 100%; object-fit: contain; }
+#overlayCanvas { position: absolute; pointer-events: none; }
 .scanner-controls { padding: 15px; display: flex; gap: 10px; }
 .scanner-controls button { flex: 1; padding: 14px; }
+.zoom-controls { padding: 10px 15px; background: rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; color: white; font-size: 13px; }
+.zoom-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; background: rgba(255,255,255,0.3); border-radius: 3px; outline: none; }
+.zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; background: #4caf50; border-radius: 50%; cursor: pointer; }
+.zoom-slider::-moz-range-thumb { width: 22px; height: 22px; background: #4caf50; border-radius: 50%; cursor: pointer; border: none; }
 .btn-capture { background: #4caf50; }
 .btn-close { background: #e74c3c; }
 .preview-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1001; flex-direction: column; padding: 20px; overflow: auto; }
@@ -123,6 +127,11 @@ input:focus, textarea:focus { outline: none; border-color: #667eea; }
     <video id="videoElement" autoplay playsinline></video>
     <canvas id="overlayCanvas"></canvas>
     <div class="detection-status" id="detectionStatus">⏳ กำลังตรวจจับ...</div>
+  </div>
+  <div class="zoom-controls">
+    <span>🔍 Zoom:</span>
+    <input type="range" id="zoomSlider" class="zoom-slider" min="1" max="3" step="0.1" value="1">
+    <span id="zoomValue">1.0x</span>
   </div>
   <div class="scanner-controls">
     <button id="captureBtn" class="btn-capture">📸 ถ่ายภาพ</button>
@@ -203,16 +212,80 @@ scanBtn.onclick = async () => {
   waitForOpenCV(async () => {
     try {
       scanner = new jscanify();
-      cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-      });
+
+      // Try to get the widest available camera (back/environment)
+      const constraints = {
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 4096 },
+          height: { ideal: 2160 },
+          aspectRatio: { ideal: 16/9 }
+        }
+      };
+
+      cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const videoTrack = cameraStream.getVideoTracks()[0];
+
+      // Try to set wide field of view
+      try {
+        const capabilities = videoTrack.getCapabilities();
+        const settings = {};
+
+        // Use widest possible
+        if (capabilities.width) {
+          settings.width = capabilities.width.max;
+        }
+        if (capabilities.height) {
+          settings.height = capabilities.height.max;
+        }
+        // Set zoom to minimum (widest)
+        if (capabilities.zoom) {
+          settings.zoom = capabilities.zoom.min;
+          // Update slider range
+          const zoomSlider = document.getElementById('zoomSlider');
+          zoomSlider.min = capabilities.zoom.min;
+          zoomSlider.max = capabilities.zoom.max;
+          zoomSlider.step = capabilities.zoom.step || 0.1;
+          zoomSlider.value = capabilities.zoom.min;
+          document.getElementById('zoomValue').textContent = capabilities.zoom.min.toFixed(1) + 'x';
+        }
+
+        await videoTrack.applyConstraints({ advanced: [settings] });
+      } catch (capErr) {
+        console.log('Camera capabilities not fully supported:', capErr);
+      }
+
       videoElement.srcObject = cameraStream;
       scannerModal.classList.add('show');
 
       videoElement.onloadedmetadata = () => {
-        overlayCanvas.width = videoElement.videoWidth;
-        overlayCanvas.height = videoElement.videoHeight;
+        // Set overlay canvas to match video display size
+        const updateCanvasSize = () => {
+          const rect = videoElement.getBoundingClientRect();
+          overlayCanvas.style.width = rect.width + 'px';
+          overlayCanvas.style.height = rect.height + 'px';
+          overlayCanvas.style.left = rect.left + 'px';
+          overlayCanvas.style.top = rect.top + 'px';
+          overlayCanvas.width = videoElement.videoWidth;
+          overlayCanvas.height = videoElement.videoHeight;
+        };
+        updateCanvasSize();
+        window.addEventListener('resize', updateCanvasSize);
+
         startDetectionLoop();
+      };
+
+      // Setup zoom slider
+      const zoomSlider = document.getElementById('zoomSlider');
+      const zoomValue = document.getElementById('zoomValue');
+      zoomSlider.oninput = async (e) => {
+        const newZoom = parseFloat(e.target.value);
+        zoomValue.textContent = newZoom.toFixed(1) + 'x';
+        try {
+          await videoTrack.applyConstraints({ advanced: [{ zoom: newZoom }] });
+        } catch (zoomErr) {
+          console.log('Zoom not supported on this device');
+        }
       };
 
       scanBtn.disabled = false;
