@@ -408,7 +408,7 @@ app.post('/auth/callback', async (req, res) => {
 
     const userInfo = await require('axios').get(
       'https://www.googleapis.com/oauth2/v2/userinfo',
-      { headers: { Authorization: \`Bearer \${tokens.access_token}\` } }
+      { headers: { Authorization: 'Bearer ' + tokens.access_token } }
     );
 
     res.json({
