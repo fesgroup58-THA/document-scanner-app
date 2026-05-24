@@ -1,4 +1,3 @@
-// Updated 2026-05-24
 const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
@@ -33,11 +32,11 @@ app.get('/auth/google-login-url', (req, res) => {
   res.json({ authUrl });
 });
 
-// OAuth Callback (GET)
+// OAuth Callback (GET) - redirect with tokens
 app.get('/auth/callback', async (req, res) => {
   try {
     const { code } = req.query;
-    if (!code) return res.status(400).json({ error: 'No code' });
+    if (!code) return res.status(400).send('No code');
 
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
@@ -47,14 +46,23 @@ app.get('/auth/callback', async (req, res) => {
       { headers: { Authorization: 'Bearer ' + tokens.access_token } }
     );
 
-    res.json({
-      success: true,
-      user: { email: userInfo.data.email, name: userInfo.data.name },
-      tokens: { access_token: tokens.access_token, refresh_token: tokens.refresh_token }
-    });
+    // Return HTML that stores tokens and redirects
+    const userEmail = userInfo.data.email || '';
+    const userName = userInfo.data.name || '';
+    const accessToken = tokens.access_token || '';
+    const refreshToken = tokens.refresh_token || '';
+
+    const html = '<!DOCTYPE html><html><head><meta charset=UTF-8><title>Loading...</title></head><body><script>' +
+      'localStorage.setItem("userTokens", JSON.stringify({access_token:"' + accessToken + '",refresh_token:"' + refreshToken + '"}));' +
+      'localStorage.setItem("userData", JSON.stringify({email:"' + userEmail + '",name:"' + userName + '"}));' +
+      'window.location.href = "/";' +
+      '</script><p>Loading...</p></body></html>';
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
   } catch (error) {
     console.error('Auth error:', error.message);
-    res.status(500).json({ error: 'Auth failed: ' + error.message });
+    res.status(500).send('Auth failed: ' + error.message);
   }
 });
 
