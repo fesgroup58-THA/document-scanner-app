@@ -25,10 +25,23 @@ const getHtmlPage = () => {
 
 // Routes
 
+// Debug - log all requests
+app.use((req, res, next) => {
+  console.log('Request:', req.method, req.path);
+  next();
+});
+
 // Home
 app.get('/', (req, res) => {
+  console.log('Home route hit');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(getHtmlPage());
+});
+
+// Catch-all for undefined routes
+app.use((req, res) => {
+  console.log('404 - Route not found:', req.path);
+  res.status(404).json({ error: 'Route not found: ' + req.path });
 });
 
 // Google Login URL
