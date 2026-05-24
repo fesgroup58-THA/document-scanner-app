@@ -46,11 +46,10 @@ app.get('/auth/callback', async (req, res) => {
       { headers: { Authorization: 'Bearer ' + tokens.access_token } }
     );
 
-    res.json({
-      success: true,
-      user: { email: userInfo.data.email, name: userInfo.data.name },
-      tokens: { access_token: tokens.access_token, refresh_token: tokens.refresh_token }
-    });
+    // Redirect and store tokens
+    const html = '<html><body><script>const data={success:true,user:{email:"' + userInfo.data.email + '",name:"' + userInfo.data.name + '"},tokens:{access_token:"' + tokens.access_token + '",refresh_token:"' + tokens.refresh_token + '"}}; localStorage.setItem("userTokens",JSON.stringify(data.tokens)); window.location.href="/";</script></body></html>';
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
   } catch (error) {
     console.error('Auth error:', error.message);
     res.status(500).json({ error: 'Auth failed: ' + error.message });
